@@ -72,7 +72,7 @@ class Trainer:
         self.model = model.to(device)
         self.D_model = DeepInfoMaxLoss().to(device)
         # print(self.model)
-        print(self.D_model)
+        # print(self.D_model)
 
         self.source_loader, self.val_loader = data_helper.get_train_dataloader(args, patches=model.is_patch_based())
         self.target_loader = data_helper.get_val_dataloader(args, patches=model.is_patch_based())
@@ -188,7 +188,7 @@ def main():
     torch.cuda.manual_seed(0)
     np.random.seed(0)
     random.seed(0)
-    # torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     # --------------------------------------------
 

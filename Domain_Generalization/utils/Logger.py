@@ -25,6 +25,7 @@ class Logger():
             self.tf_logger = None
         self.current_iter = 0
         self.log_path=log_path
+        print("Save the training log in path: {}".format(join(folder, logname)))
 
     def new_epoch(self, learning_rates):
         self.current_epoch += 1
