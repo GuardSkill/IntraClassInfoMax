@@ -1,0 +1,6 @@
+python == 3.6.10
+pytorch == 1.1.0
+torchvision == 0.3.0
+cudatoolkit == 10.0
+tensorflow == 1.14
+tensorflow-gpu == 1.14
