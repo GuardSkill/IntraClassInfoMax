@@ -5,8 +5,8 @@ from models.resencoder import GlobalDiscriminator, LocalDiscriminator, PriorDisc
 import torch.nn as nn
 
 
-class DeepInfoMaxLoss(nn.Module):
-    def __init__(self, alpha=0.1, beta=0.1, gamma=1):
+class IntraClassnfoMaxLoss(nn.Module):
+    def __init__(self, alpha=0.5, beta=1.0, gamma=0.1):
         super().__init__()
         self.global_d = GlobalDiscriminator()
         self.local_d = LocalDiscriminator()
@@ -22,14 +22,7 @@ class DeepInfoMaxLoss(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def prior_loss(self, y):
-        prior = torch.rand_like(y)
-        term_a = torch.log(self.prior_d(prior)).mean()
-        term_b = torch.log(1.0 - self.prior_d(y)).mean()
-        PRIOR = -(term_a + term_b) * self.gamma
-        return PRIOR
-
-    def forward(self, y, M, M_prime):
+    def forward(self, y, M, M_prime,label):
         # see appendix 1A of https://arxiv.org/pdf/1808.06670.pdf
 
         y_exp = y.unsqueeze(-1).unsqueeze(-1)
@@ -46,23 +39,27 @@ class DeepInfoMaxLoss(nn.Module):
         Em = F.softplus(self.global_d(y, M_prime)).mean()
         GLOBAL = (Em - Ej) * self.alpha
 
-        return LOCAL + GLOBAL
+        prior = torch.rand_like(y)
 
+        term_a = torch.log(self.prior_d(prior)).mean()
+        term_b = torch.log(1.0 - self.prior_d(y)).mean()
+        PRIOR = - (term_a + term_b) * self.gamma
 
+        return LOCAL + GLOBAL + PRIOR
 if __name__ == '__main__':
     N, D_in, H, D_out = 64, 3, 100, 10
-    B = 128
-    H = 208
-    W = H
+    B=128
+    H=208
+    W=H
     dtype = torch.float
     device = torch.device("cuda")
     # x=torch.randn(123,D_in, H, device=device, dtype=dtype, requires_grad=True)
-    x = torch.zeros(B, D_in, H, W, device=device, dtype=dtype, requires_grad=True)
-    encoder = resnet18(True).cuda()
-    y, M = encoder(x, True)
+    x = torch.zeros(B,D_in, H, W,device=device, dtype=dtype, requires_grad=True)
+    encoder=resnet18(True).cuda()
+    y, M = encoder(x,True)
     DIM_loss_fn = DeepInfoMaxLoss().to(device)
     # rotate images to create pairs for comparison
     print(M[1:].shape)
     print(M[0].unsqueeze(0).shape)
-    M_prime = torch.cat((M[1:], M[0].unsqueeze(0)), dim=0)  # move to front one by one
-    loss = DIM_loss_fn(y, M, M_prime)
+    M_prime = torch.cat((M[1:], M[0].unsqueeze(0)), dim=0)    # move to front one by one
+    loss = DIM_loss_fn (y, M, M_prime)
