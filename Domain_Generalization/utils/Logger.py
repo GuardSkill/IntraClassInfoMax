@@ -73,7 +73,7 @@ class Logger():
         folder_name = "%s_to_%s" % ("-".join(sorted(args.source)), args.target)
         if args.folder_name:
             folder_name = join(args.folder_name, folder_name)
-        name = "eps%d_bs%d_lr%g_class%d_GLoss%g_LLoss%g_PLoss%g" % (args.epochs, args.batch_size, args.learning_rate, args.n_classes,
+        name = "eps%d_bs%d_lr%g_class%d_G%g_L%g_P%g" % (args.epochs, args.batch_size, args.learning_rate, args.n_classes,
                                                                  args.alpha, args.beta,args.gamma)
         # if args.ooo_weight > 0:
         #     name += "_oooW%g" % args.ooo_weight

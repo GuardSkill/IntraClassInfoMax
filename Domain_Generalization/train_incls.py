@@ -10,7 +10,7 @@ from data import data_helper
 ## from IPython.core.debugger import set_trace
 from data.data_helper import available_datasets
 from models import model_factory
-from models.loss import DeepInfoMaxLoss
+from models.loss import IntraClsInfoMax
 from optimizer.optimizer_helper import get_optim_and_scheduler
 from utils.Logger import Logger
 import numpy as np
@@ -72,7 +72,7 @@ class Trainer:
         else:
             model = resnet18(pretrained=True, classes=args.n_classes)
         self.model = model.to(device)
-        self.D_model = DeepInfoMaxLoss(alpha=args.alpha, beta=args.beta, gamma=args.gamma).to(device)
+        self.D_model = IntraClsInfoMax(alpha=args.alpha, beta=args.beta, gamma=args.gamma).to(device)
         # print(self.model)
         # print(self.D_model)
 
@@ -83,13 +83,10 @@ class Trainer:
         print("Dataset size: train %d, val %d, test %d" % (
             len(self.source_loader.dataset), len(self.val_loader.dataset), len(self.target_loader.dataset)))
 
-        self.optimizer, self.scheduler = get_optim_and_scheduler(
-            [self.model, self.D_model.global_d, self.D_model.local_d], args.epochs, args.learning_rate, args.train_all,
-            nesterov=args.nesterov)
-        self.dis_optimizer, self.dis_scheduler = get_optim_and_scheduler([self.D_model.prior_d], args.epochs,
-                                                                         args.learning_rate * 1e-3, args.train_all,
-                                                                         nesterov=args.nesterov)
-        # args.learning_rate*1e-3
+        self.optimizer, self.scheduler = get_optim_and_scheduler([self.model,self.D_model.global_d, self.D_model.local_d], args.epochs, args.learning_rate, args.train_all,
+                                                                 nesterov=args.nesterov)
+        self.dis_optimizer,self.dis_scheduler = get_optim_and_scheduler([self.D_model.prior_d], args.epochs, args.learning_rate, args.train_all,
+                                                                 nesterov=args.nesterov) #args.learning_ratee*1e-3
         self.n_classes = args.n_classes
         if args.target in args.source:
             self.target_id = args.source.index(args.target)
@@ -101,7 +98,7 @@ class Trainer:
         self.logger = Logger(self.args, update_frequency=30)
         self.results = {"val": torch.zeros(self.args.epochs), "test": torch.zeros(self.args.epochs)}
 
-    def _do_epoch(self, device='cuda'):
+    def _do_epoch(self,device='cuda'):
 
         criterion = nn.CrossEntropyLoss()
         self.model.train()
@@ -115,7 +112,7 @@ class Trainer:
             data_flip = torch.flip(data, (3,)).detach().clone()
             data = torch.cat((data, data_flip))
             class_l = torch.cat((class_l, class_l))
-            # class_logit = self.model(data, class_l, True, epoch)
+
             y, M = self.model(data, feature_flag=True)
 
             # Classification Loss
@@ -124,29 +121,33 @@ class Trainer:
 
             # G loss - DIM Loss - P_loss
             M_prime = torch.cat((M[1:], M[0].unsqueeze(0)), dim=0)  # Move feature to front position one by one
-            DIM_loss = self.D_model(y, M, M_prime)
-            P_loss = self.D_model.prior_loss(y)
+            class_prime= torch.cat((class_l[1:], class_l[0].unsqueeze(0)), dim=0)
+            class_ll = (class_l, class_prime)
 
-            DIM_loss = DIM_loss - P_loss
+            DIM_loss = self.D_model(y, M, M_prime,class_ll)
+            P_loss=self.D_model.prior_loss(y)
+
+            DIM_loss = DIM_loss- P_loss
             # DIM_loss=self.beta*(DIM_loss-P_loss)
             loss = class_loss + DIM_loss
             loss.backward()
             self.optimizer.step()
 
             self.dis_optimizer.zero_grad()
-            P_loss = self.D_model.prior_loss(y.detach())
+            P_loss=self.D_model.prior_loss(y.detach())
             P_loss.backward()
             self.dis_optimizer.step()
 
             # Prediction
             _, cls_pred = class_logit.max(dim=1)
 
-            losses = {'class': class_loss.detach().item(), 'DIM': DIM_loss.detach().item(),
-                      'P_loss': P_loss.detach().item()}
+
+
+            losses = {'class': class_loss.detach().item(), 'DIM': DIM_loss.detach().item(), 'P_loss': P_loss.detach().item()}
             self.logger.log(it, len(self.source_loader),
                             losses,
                             {"class": torch.sum(cls_pred == class_l.data).item(), }, data.shape[0])
-            del loss, class_loss, class_logit, DIM_loss
+            del loss, class_loss, class_logit,DIM_loss
 
         self.model.eval()
         with torch.no_grad():
@@ -177,8 +178,8 @@ class Trainer:
         for self.current_epoch in range(self.args.epochs):
             self.scheduler.step()
             self.dis_scheduler.step()
-            self.logger.new_epoch([*self.scheduler.get_lr(), *self.dis_scheduler.get_lr()])
-            self._do_epoch()  # use self.current_epoch
+            self.logger.new_epoch([*self.scheduler.get_lr(),*self.dis_scheduler.get_lr()])
+            self._do_epoch()        # use self.current_epoch
         val_res = self.results["val"]
         test_res = self.results["test"]
         idx_best = val_res.argmax()
