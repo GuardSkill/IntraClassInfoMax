@@ -46,8 +46,9 @@ class Logger():
         self.total += total_samples
         acc_string = ", ".join(["%s : %.2f" % (k, 100 * (v / total_samples)) for k, v in samples_right.items()])
         if it % self.update_f == 0:
-            print("%d/%d of epoch %d/%d %s - acc %s [bs:%d]" % (it, iters, self.current_epoch, self.max_epochs, loss_string,
-                                                                acc_string, total_samples))
+            # print loss
+            # print("%d/%d of epoch %d/%d %s - acc %s [bs:%d]" % (it, iters, self.current_epoch, self.max_epochs, loss_string,
+            #                                                     acc_string, total_samples))
             # update tf log
             if self.tf_logger:
                 for k, v in losses.items(): self.tf_logger.scalar_summary("train/loss_%s" % k, v, self.current_iter)

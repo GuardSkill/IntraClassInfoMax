@@ -1,6 +1,7 @@
 import argparse
 import os
 
+from tqdm import tqdm
 import random
 import torch
 # from IPython.core.debugger import set_trace
@@ -106,7 +107,11 @@ class Trainer:
         criterion = nn.CrossEntropyLoss()
         self.model.train()
         self.D_model.train()
-        for it, ((data, jig_l, class_l), d_idx) in enumerate(self.source_loader):
+
+        # inner = tqdm.tqdm(total=len(self.source_loader), desc='Batch', position=0)
+        t_bar=tqdm(self.source_loader,desc='Epoch %d'%self.current_epoch)
+        for it, ((data, jig_l, class_l), d_idx) in enumerate(t_bar):
+            # t_bar.set_description(f"Train Epoch {self.current_epoch}")
             data, jig_l, class_l, d_idx = data.to(self.device), jig_l.to(self.device), class_l.to(
                 self.device), d_idx.to(self.device)
 
@@ -143,10 +148,15 @@ class Trainer:
 
             losses = {'class': class_loss.detach().item(), 'DIM': DIM_loss.detach().item(),
                       'P_loss': P_loss.detach().item()}
+            log_bar = {'Cls': '%.2f' % class_loss.detach().item(), 'Pir': '%.2f' % P_loss.detach().item(),
+             'DIM': '%.2f' % DIM_loss.detach().item()}
             self.logger.log(it, len(self.source_loader),
                             losses,
                             {"class": torch.sum(cls_pred == class_l.data).item(), }, data.shape[0])
+            t_bar.set_postfix(log_bar)
             del loss, class_loss, class_logit, DIM_loss
+        t_bar.close()
+
 
         self.model.eval()
         with torch.no_grad():
